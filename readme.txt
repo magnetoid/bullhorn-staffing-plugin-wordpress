@@ -1,5 +1,5 @@
 === Bullhorn api client for wordpress ===
-Contributors: yaroslawww
+Contributors: Marko Tiosavljevic
 Tags: bullhorn
 Requires at least: 5.3
 Tested up to: 5.3
