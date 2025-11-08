@@ -1,0 +1,19 @@
+{
+    "name": "yaroslawww/wp-bullhornstaffing",
+    "description": "Bullhorn Staffing synchronisation plugin",
+    "type": "wp-plugin",
+    "license": "Apache",
+    "authors": [
+        {
+            "name": "Yaroslav Georgitsa",
+            "email": "yaroslav.georgitsa@gmail.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": { "WPBullhornStaffing\\": ["src/"] }
+    },
+    "require": {
+        "jonathanraftery/bullhorn-rest-client": "^0.3.3",
+        "tightenco/collect": "^7.9"
+    }
+}
