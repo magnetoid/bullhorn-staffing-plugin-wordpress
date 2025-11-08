@@ -1,0 +1,30 @@
+{
+    "name": "jonathanraftery/bullhorn-auth-client",
+    "description": "Simple authorization client to create Bullhorn REST API sessions",
+    "keywords": [
+        "bullhorn", "authentication", "rest", "api"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Jonathan Raftery",
+            "email": "jonathan@jonathanraftery.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "league/oauth2-client": "^2.3",
+        "guzzlehttp/guzzle": "~6.0"
+    },
+    "autoload": {
+        "classmap": [
+            "src/"
+        ],
+        "psr-4": {
+            "jonathanraftery\\Bullhorn\\REST\\Authentication\\": "src/"
+        }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^7"
+    }
+}
