@@ -1,70 +1,36 @@
 <?php
-
+declare(strict_types=1);
 
 namespace WPBullhornStaffing\Domain\Entities;
 
+use WPBullhornStaffing\Domain\Collections\Collection;
 
-use Tightenco\Collect\Support\Collection;
-use WPBullhornStaffing\Domain\Contracts\CanFetch;
-
-class CandidateFiles implements CanFetch
+class CandidateFiles
 {
+    protected int $candidateId;
+    protected array $files = [];
 
-    /** @var array */
-    public $files = [];
-    protected $candidateId;
-
-
-    public function __construct(int $id)
+    public function __construct(int $candidateId)
     {
-        $this->candidateId = $id;
+        $this->candidateId = $candidateId;
     }
 
-    public static function transientName($id)
+    public static function fromObject(array $data): self
     {
-        return 'wpbstaff_files_' . substr(strrchr(static::class, "\\"), 1) . '_' . $id;
-    }
-
-    public static function find($id)
-    {
-        $transientName = static::transientName($id);
-
-        $data = get_transient($transientName);
-        if ($data) {
-            return $data;
-        }
-
-        $obj = new static($id);
-        $obj->initialize();
-
-        return $obj;
-    }
-
-    public function refresh() {
-        $this->initialize();
-    }
-
-    public function clearCache() {
-        delete_transient(static::transientName($this->candidateId));
-    }
-
-    public static function fromObject($data)
-    {
-        if (!$data['candidateId']) {
-            throw new \Exception('$data[\'candidateId\'] not present');
+        if (empty($data['candidateId'])) {
+            throw new \Exception("candidateId key is required");
         }
         $obj = new static($data['candidateId']);
-        $obj->setData($data);
-
+        $obj->setData($data['files'] ?? []);
         return $obj;
     }
 
-    protected function fetchInfo()
+    protected function fetchInfo(): array
     {
-
         $response = \WPBullhornStaffing::instance()->request(
             'GET',
-            'entityFiles/Candidate/' . $this->candidateId, []
+            'entityFiles/Candidate/' . $this->candidateId,
+            []
         );
 
         if (is_wp_error($response)) {
@@ -72,13 +38,10 @@ class CandidateFiles implements CanFetch
             return [];
         }
 
-        if (is_array($response->EntityFiles)) {
-            return $response->EntityFiles;
-        }
-        return [];
+        return $response->EntityFiles ?? [];
     }
 
-    public function removeFile($fileId)
+    public function removeFile(int $fileId): bool
     {
         $response = \WPBullhornStaffing::instance()->request(
             'DELETE',
@@ -88,12 +51,11 @@ class CandidateFiles implements CanFetch
             error_log($response->get_error_message());
             return false;
         }
-
         $this->clearCache();
         return true;
     }
 
-    public function uploadFile($externalID, $fileContent, $name, $additional)
+    public function uploadFile(string $externalID, string $fileContent, string $name, array $additional): mixed
     {
         $response = \WPBullhornStaffing::instance()->request(
             'PUT',
@@ -112,10 +74,10 @@ class CandidateFiles implements CanFetch
             return false;
         }
         $this->clearCache();
-        return $response->fileId;
+        return $response->fileId ?? null;
     }
 
-    public function resumeParseToCandidate($filePath, $name)
+    public function resumeParseToCandidate(string $filePath, string $name): mixed
     {
         $response = \WPBullhornStaffing::instance()->request(
             'POST',
@@ -138,11 +100,10 @@ class CandidateFiles implements CanFetch
             error_log($response->get_error_message());
             return null;
         }
-
         return $response;
     }
 
-    protected function initialize()
+    protected function initialize(): void
     {
         $data = $this->fetchInfo();
         if ($data) {
@@ -150,41 +111,33 @@ class CandidateFiles implements CanFetch
         }
     }
 
-    protected function setData($data)
+    public function setData(array $data): self
     {
         $this->files = $data;
         set_transient(static::transientName($this->candidateId), $this, HOUR_IN_SECONDS);
         return $this;
     }
 
-    public function getCVFiles()
+    public function clearCache(): void
+    {
+        delete_transient(static::transientName($this->candidateId));
+    }
+
+    public static function transientName(int $candidateId): string
+    {
+        return 'wpbstaff_candidate_files_' . $candidateId;
+    }
+
+    public function getCVFiles(): array
     {
         $collection = Collection::make($this->files);
-        $filtered = $collection->where('type', 'CV')
-            ->sortByDesc('dateAdded');
-
+        $filtered = $collection->where('type', 'CV')->sortByDesc('dateAdded');
         return $filtered->toArray();
     }
 
-    public function getLastCV()
+    public function getLastCV(): mixed
     {
-        $collection = Collection::make($this->files);
-        $filtered = $collection->where('type', 'CV')
-            ->sortByDesc('dateAdded');
-
-        return $filtered->first();
+        $cvs = $this->getCVFiles();
+        return !empty($cvs) ? $cvs[0] : null;
     }
-
-    public static function cvAllowedMimeTypes()
-    {
-        return [
-            'application/pdf', // PDF
-            'application/x-pdf', // PDF
-            'application/msword', // DOC
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
-            'application/vnd.oasis.opendocument.text', // ODT
-            'application/rtf', // RTF
-        ];
-    }
-
 }

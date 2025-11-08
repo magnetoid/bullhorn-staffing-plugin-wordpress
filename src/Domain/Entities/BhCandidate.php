@@ -1,44 +1,41 @@
 <?php
+declare(strict_types=1);
 
 namespace WPBullhornStaffing\Domain\Entities;
 
-
 class BhCandidate
 {
-    /** @var int */
-    protected $bhId;
+    protected int $bhId;
+    protected ?\WP_User $user = null;
+    protected array $info = [];
+    protected $gateway;
 
-    /** @var \WP_User */
-    protected $user;
-
-    protected $info;
-
-    /**
-     * BhCandidate constructor.
-     * @param int $bhId
-     */
-    public function __construct($bhId)
+    public function __construct(int $bhId)
     {
-        $this->bhId = (int)$bhId;
+        $this->bhId = $bhId;
     }
 
-    public function setUser(\WP_User $user)
+    public function setUser(\WP_User $user): self
     {
         $this->user = $user;
         return $this;
     }
 
-    public function getInfo($key)
+    public function getInfo(string $key)
     {
-        if(!$this->info) {
-            $this->fetchInfo();
+        if(empty($this->info)) {
+            $this->info = $this->fetchInfo();
         }
+        return $this->info[$key] ?? null;
     }
 
-    private function fetchInfo()
+    private function fetchInfo(): array
     {
-        $this->gateway->candidate()->find($this->bhId);
+        // Example gateway usage. Extend/replace for your API
+        if (!$this->gateway) {
+            // Initialize gateway or throw error
+            return [];
+        }
+        return $this->gateway->candidate()->find($this->bhId) ?? [];
     }
-
-
 }

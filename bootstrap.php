@@ -1,12 +1,15 @@
 <?php
+declare(strict_types=1);
 /**
  * Plugin Name: WP Bullhorn Staffing
- * Plugin URI:
- * Description: Bullhorn Staffing synchronisation plugin
- * Version: 0.0.8
+ * Plugin URI: https://github.com/magnetoid/bullhorn-staffing-plugin-wordpress
+ * Description: Bullhorn Staffing synchronisation plugin for WordPress
+ * Version: 0.1.0
  * Author: Think studio
  * Author URI: https://think.studio/
- * Developer: Yaroslav Georgitsa <yaroslav.georgitsa@gmail.com>
+ * Requires PHP: 7.4
+ * Requires at least: 5.8
+ * Tested up to: 6.4
  */
 
 require __DIR__ . '/vendor/autoload.php';
@@ -15,39 +18,22 @@ if (!defined('WPBS_PLUGIN_FILE')) {
     define('WPBS_PLUGIN_FILE', __FILE__);
 }
 
-
-class WPBullhornStaffing
+final class WPBullhornStaffing
 {
-    private static $instance = null;
-
-    private $restError = false;
-
-    /** @var \jonathanraftery\Bullhorn\Rest\Client */
-    protected $restClient;
+    private static ?WPBullhornStaffing $instance = null;
+    private bool $restError = false;
+    protected ?\jonathanraftery\Bullhorn\Rest\Client $restClient = null;
 
     private function __construct()
     {
-        register_activation_hook(__FILE__, [&$this, 'activate']);
-        register_deactivation_hook(__FILE__, [&$this, 'deactivate']);
+        register_activation_hook(__FILE__, [self::class, 'activate']);
+        register_deactivation_hook(__FILE__, [self::class, 'deactivate']);
         $this->initAdmin();
         $this->initFront();
     }
 
-    private function __clone()
-    {
-    }
-
-    private function __wakeup()
-    {
-    }
-
-    public function activate()
-    {
-    }
-
-    public function deactivate()
-    {
-    }
+    private function __clone() {}
+    private function __wakeup() {}
 
     public static function instance(): WPBullhornStaffing
     {
@@ -57,18 +43,28 @@ class WPBullhornStaffing
         return static::$instance;
     }
 
-    public function isRestError()
+    public static function activate(): void
+    {
+        // Add DB migrations or plugin requirements as needed
+    }
+
+    public static function deactivate(): void
+    {
+        // Optional: flush plugin-specific caches/transients/options.
+    }
+
+    public function isRestError(): bool
     {
         $this->initRestClient();
         return $this->restError;
     }
 
-    public static function pluginPath(string $pathWithoutFirstSlash = '')
+    public static function pluginPath(string $pathWithoutFirstSlash = ''): string
     {
         return plugin_dir_path(WPBS_PLUGIN_FILE) . $pathWithoutFirstSlash;
     }
 
-    public static function pluginUrl(string $pathWithoutFirstSlash = '')
+    public static function pluginUrl(string $pathWithoutFirstSlash = ''): string
     {
         return plugin_dir_url(WPBS_PLUGIN_FILE) . $pathWithoutFirstSlash;
     }
@@ -83,90 +79,101 @@ class WPBullhornStaffing
             if ($user === null) {
                 $user = wp_get_current_user();
             } elseif (is_numeric($user)) {
-                $user = get_userdata($user);
+                $user = get_userdata((int)$user);
             }
-
-            if (!($user instanceof WP_User) || !$user->user_email) {
-                return null;
+            if ($user instanceof WP_User) {
+                return (new \WPBullhornStaffing\App\CandidateFinder())->find($user);
             }
-
-            return (new \WPBullhornStaffing\App\CandidateFinder())->find($user);
-        } catch (Exception $e) {
-            return null;
-        }
-    }
-
-    protected function initRestClient()
-    {
-        if (!defined('BH_CLIENT_ID') || !defined('BH_CLIENT_SECRET')
-            || !defined('BH_API_USERNAME') || !defined('BH_API_PASSWORD')
-        ) {
-            return false;
-        }
-        if ($this->restClient) {
-            return $this->restClient;
-        }
-        try {
-            $client = new \jonathanraftery\Bullhorn\Rest\Client(
-                BH_CLIENT_ID,
-                BH_CLIENT_SECRET,
-                new \jonathanraftery\Bullhorn\WordpressDataStore()
-            );
-            $client->refreshOrInitiateSession(
-                BH_API_USERNAME,
-                BH_API_PASSWORD,
-                ['ttl' => 240]
-            );
-
-            $this->restClient = $client;
-        } catch (Exception $e) {
-            $this->restError = true;
-            error_log('rest client' . $e->getMessage());
-        }
-    }
-
-    protected function initAdmin()
-    {
-    }
-
-    protected function initFront()
-    {
-    }
-
-    public function request(
-        $method,
-        $url,
-        $options = [],
-        $headers = []
-    )
-    {
-        $this->initRestClient();
-
-        if (!$this->restClient) {
-            return new WP_Error(500, 'REST not Working');
-        }
-        try {
-            return $this->restClient->request($method, $url, $options, $headers);
-        } catch (Exception $exception) {
-            return new WP_Error($exception->getCode(), $exception->getMessage());
-        }
-    }
-
-
-    public function findInBullhornByEmail($userEmail)
-    {
-        $response = WPBullhornStaffing::instance()->request('GET', 'search/Candidate', ['query' => ['query' => 'isDeleted:0 AND email:' . $userEmail, 'fields' => 'id,firstName,lastName,email', 'count' => 1]]);
-        if (is_wp_error($response)) {
-            return null;
-        }
-        if ($response->count && $response->count > 0) {
-            return $response->data[0];
+        } catch (\Throwable $e) {
+            error_log('Candidate Error: ' . $e->getMessage());
         }
         return null;
     }
 
+    protected function initAdmin(): void
+    {
+        // Settings page could be added here via add_options_page
+        add_action('admin_notices', [$this, 'showRestErrorNotice']);
+    }
+
+    protected function initFront(): void
+    {
+        // Setup REST endpoints/shortcodes etc.
+    }
+
+    public function showRestErrorNotice()
+    {
+        if ($this->restError) {
+            echo '<div class="notice notice-error"><p>Bullhorn Staffing Plugin REST client failed. Check API credentials and connectivity.</p></div>';
+        }
+    }
+
+    /**
+     * Safely initializes/restores the REST client.
+     */
+    protected function initRestClient(): void
+    {
+        if ($this->restClient !== null) {
+            return;
+        }
+        try {
+            $clientId = defined('BH_CLIENT_ID') ? BH_CLIENT_ID : get_option('bh_client_id');
+            $clientSecret = defined('BH_CLIENT_SECRET') ? BH_CLIENT_SECRET : get_option('bh_client_secret');
+            $username = defined('BH_API_USERNAME') ? BH_API_USERNAME : get_option('bh_api_username');
+            $password = defined('BH_API_PASSWORD') ? BH_API_PASSWORD : get_option('bh_api_password');
+            if (!$clientId || !$clientSecret || !$username || !$password) {
+                throw new \Exception('Bullhorn API credentials missing!');
+            }
+            $this->restClient = new \jonathanraftery\Bullhorn\Rest\Client($clientId, $clientSecret, $username, $password);
+        } catch (\Throwable $e) {
+            $this->restError = true;
+            error_log('REST client: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Universal API request wrapper.
+     */
+    public function request(
+        string $method,
+        string $url,
+        array $options = [],
+        array $headers = []
+    ) {
+        $this->initRestClient();
+        if (!$this->restClient) {
+            $this->restError = true;
+            return new WP_Error(500, 'REST client not initialized');
+        }
+        try {
+            return $this->restClient->request($method, $url, $options, $headers);
+        } catch (\Throwable $exception) {
+            $this->restError = true;
+            return new WP_Error($exception->getCode(), $exception->getMessage());
+        }
+    }
+
+    public function findInBullhornByEmail(string $userEmail)
+    {
+        $response = WPBullhornStaffing::instance()->request(
+            'GET',
+            'search/Candidate',
+            [
+                'query' => [
+                    'query' => 'isDeleted:0 AND email:' . $userEmail,
+                    'fields' => 'id,firstName,lastName,email',
+                    'count' => 1
+                ]
+            ]
+        );
+        if (is_wp_error($response)) {
+            return null;
+        }
+        if (!empty($response->data)) {
+            return $response->data[0] ?? null;
+        }
+        return null;
+    }
 }
 
 WPBullhornStaffing::instance();
-
-

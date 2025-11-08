@@ -1,19 +1,14 @@
 <?php
-
+declare(strict_types=1);
 
 namespace WPBullhornStaffing\Domain\Options;
 
 abstract class AbstractOptions
 {
-    protected static $instance;
+    protected static ?self $instance = null;
 
-    private function __construct()
-    {
-    }
-
-    final protected function __clone()
-    {
-    }
+    private function __construct() {}
+    final protected function __clone() {}
 
     public static function getInstance(): self
     {
@@ -23,8 +18,9 @@ abstract class AbstractOptions
         return static::$instance;
     }
 
+    abstract protected function getOptionsType(): string;
 
-    protected function getPaginatedIdList($query = []): array
+    protected function getPaginatedIdList(array $query = []): array
     {
         $data = [];
         $start = 0;
@@ -44,31 +40,10 @@ abstract class AbstractOptions
                 return [];
             }
 
-            $list = $response->data;
+            $list = $response->data ?? [];
             $start += 300;
-
-            $data += $list;
-        } while (count($list) > 0);
-        return $data;
-    }
-
-    abstract public function getOptionsType(): string;
-
-    public function getOptions($forceFetch = false, $cacheTime = DAY_IN_SECONDS): array
-    {
-        $transientName = 'wpbstaff_options_' . $this->getOptionsType();
-        $data = null;
-
-        if(!$forceFetch) {
-            $data = get_transient($transientName);
-        }
-
-        if(!$data) {
-            $data = $this->getPaginatedIdList();
-            if($data && !empty($data)) {
-                set_transient($transientName, $data, $cacheTime);
-            }
-        }
+            $data = array_merge($data, $list);
+        } while(count($list) === 300);
 
         return $data;
     }

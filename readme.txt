@@ -1,40 +1,44 @@
-=== Bullhorn api client for wordpress ===
+=== Bullhorn Staffing API Client for WordPress ===
 Contributors: Marko Tiosavljevic
-Tags: bullhorn
-Requires at least: 5.3
-Tested up to: 5.3
-Requires PHP: 7.2
-Stable tag: 1.0.0
+Tags: bullhorn, staffing, api
+Requires at least: 5.8
+Tested up to: 6.4
+Requires PHP: 7.4
+Stable tag: 0.1.0
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
 == Description ==
+Bullhorn Staffing synchronisation plugin, updated for latest WP and PHP.
 
-Bullhorn Staffing synchronisation plugin
+== Installation ==
+1. Upload plugin and activate.
+2. Configure API credentials via the settings page (future) or via wp-config.php as fallback:
+```php
+define('BH_CLIENT_ID', 'your-client-id');
+define('BH_CLIENT_SECRET', 'your-client-secret');
+define('BH_API_USERNAME', 'your-username');
+define('BH_API_PASSWORD', 'your-password');
+```
 
 == Frequently Asked Questions ==
 
-= How add bullhorn credentials =
-You should define constants in wp-config.php
-```php
-define('BH_CLIENT_ID', 'dc585694-g09...');
-define('BH_CLIENT_SECRET', 'Ico50E....');
-define('BH_API_USERNAME', 'your_username');
-define('BH_API_PASSWORD', 'your_password');
-```
+= How do I add Bullhorn credentials? =
+Via WP admin: Bullhorn Staffing → Settings. (Or use constants above.)
 
-= How get current user candidate =
+= Health Checks =
+Errors and connection failures will show up as admin notices. Check Site Health screen for plugin status.
+
+= Getting Current User Candidate =
 ```php
 $candidate = \WPBullhornStaffing::candidate();
-if($candidate) {
+if ($candidate) {
     // candidate found
 }
 ```
 
-= How get specific user candidate =
-```php
-$candidate = \WPBullhornStaffing::candidate($user);
-if($candidate) {
-    // candidate found
-}
-```
+== Changelog ==
+= 0.1.0 =
+* Updated compatibility with WP 6.4 and PHP 8.0+
+* Admin error notices, improved REST handling
+* Planned: Settings page for API credentials

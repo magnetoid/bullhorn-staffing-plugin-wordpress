@@ -1,71 +1,53 @@
 <?php
-
+declare(strict_types=1);
 
 namespace WPBullhornStaffing\Domain\Entities;
 
-
-use WPBullhornStaffing\Domain\Contracts\CanFetch;
-
-abstract class AbstractBhEntity implements CanFetch
+abstract class AbstractBhEntity
 {
+    protected int $id;
 
-    /** @var string[] */
-    protected $fields = [];
+    abstract public function getEntityType(): string;
 
-    /** @var array */
-    protected $fieldsMap = [];
-
-    public function __construct()
+    protected function updateValuesBeforeSend(array $values): array
     {
+        // Filter or massage values as needed before sending
+        return $values;
     }
 
-    public function getId(): int
-    {
-        return (int)$this->id;
-    }
-
-    public function setId($id)
-    {
-        $this->id = $id;
-        return $this;
-    }
-
-
-    public static function transientName($id)
-    {
-        return 'wpbstaff_entity_' . substr(strrchr(static::class, "\\"), 1) . '_' . $id;
-    }
-
-    /**
-     * @see https://bullhorn.github.io/rest-api-docs/#get-search
-     * @param array $query
-     * @return |null
-     */
-    public static function search(array $query = [])
+    public static function create(array $data = []): ?self
     {
         $obj = new static();
+
+        $data = $obj->updateValuesBeforeSend($data);
+
         $response = \WPBullhornStaffing::instance()->request(
-            'GET',
-            'search/' . $obj->getEntityType(),
+            'PUT',
+            'entity/' . $obj->getEntityType(),
             [
-                'query' => array_merge([
-                    'query' => 'isDeleted:0',
-                    'fields' => implode(',', array_merge(
-                        $obj->fields,
-                        array_keys($obj->fieldsMap)
-                    ))
-                ], $query)
+                'json' => $data
+            ],
+            [
+                'Content-Type' => 'application/json'
             ]
         );
+
         if (is_wp_error($response)) {
             error_log($response->get_error_message());
             return null;
         }
 
-        return $response->data;
+        if (empty($response->changedEntityId)) {
+            error_log(print_r($response, true));
+            return null;
+        }
+
+        $obj->initialize((int)$response->changedEntityId);
+
+        return $obj;
     }
 
-    public static function find($id)
+    public static function find($id): ?self
     {
         $transientName = static::transientName($id);
 
@@ -80,14 +62,36 @@ abstract class AbstractBhEntity implements CanFetch
         return $obj;
     }
 
-    public function updateFields($values, $force = false): int
+    public static function search(array $query = []): ?array
     {
-        if (!$this->getId()) {
+        $obj = new static();
+        $fields = $obj->fields ?? [];
+        $fieldsMap = $obj->fieldsMap ?? [];
+
+        $response = \WPBullhornStaffing::instance()->request(
+            'GET',
+            'search/' . $obj->getEntityType(),
+            [
+                'query' => array_merge([
+                    'query' => 'isDeleted:0',
+                    'fields' => implode(',', array_merge($fields, array_keys($fieldsMap)))
+                ], $query)
+            ]
+        );
+        if (is_wp_error($response)) {
+            error_log($response->get_error_message());
+            return null;
+        }
+
+        return $response->data ?? null;
+    }
+
+    public function updateFields(array $values, bool $force = false): int
+    {
+        if (empty($this->getId())) {
             throw new \Exception('Entity ID not specified');
         }
 
-        // $allowedKeys = array_merge($this->fields, array_values($this->fieldsMap));
-        // $values = array_intersect_key($values, array_flip($allowedKeys));
         if (isset($values['id'])) {
             unset($values['id']);
         }
@@ -96,7 +100,7 @@ abstract class AbstractBhEntity implements CanFetch
         }
 
         if ($force) {
-            $data = call_user_func('get_object_vars', $this);
+            $data = get_object_vars($this);
             $values = array_merge($data, $values);
         }
 
@@ -123,39 +127,30 @@ abstract class AbstractBhEntity implements CanFetch
         return count($values);
     }
 
-    public static function create($data = [])
+    abstract protected function getId(): int;
+
+    protected function initialize($id): void
     {
-        $obj = new static();
-
-        $data = $obj->updateValuesBeforeSend($data);
-
-        $response = \WPBullhornStaffing::instance()->request(
-            'PUT',
-            'entity/' . $obj->getEntityType(),
-            [
-                'json' => $data
-            ],
-            [
-                'Content-Type' => 'application/json'
-            ]
-        );
-
-        if (is_wp_error($response)) {
-            error_log($response->get_error_message());
-            return null;
-        }
-
-        if (!$response->changedEntityId) {
-            error_log($response);
-            return null;
-        }
-
-        $obj->initialize($response->changedEntityId);
-
-        return $obj;
+        $this->id = (int)$id;
+        // Extend with fetching remote data if needed
     }
 
-    public function delete()
+    protected function setData($data): void
+    {
+        // Map $data onto properties
+        foreach ($data as $k => $v) {
+            if (property_exists($this, $k)) {
+                $this->$k = $v;
+            }
+        }
+    }
+
+    public static function transientName(int $id): string
+    {
+        return 'wpbstaff_entity_' . static::class . '_' . $id;
+    }
+
+    public function delete(): bool
     {
         $response = \WPBullhornStaffing::instance()->request(
             'DELETE',
@@ -166,107 +161,6 @@ abstract class AbstractBhEntity implements CanFetch
             error_log($response->get_error_message());
             return false;
         }
-
-        delete_transient(static::transientName($this->getId()));
-
         return true;
     }
-
-    public function attach(string $entityType, int $id): bool
-    {
-        $response = \WPBullhornStaffing::instance()->request(
-            'PUT',
-            'entity/' . $this->getEntityType() . '/' . $this->getId() . '/' . $entityType . '/' . $id
-        );
-
-        if (is_wp_error($response)) {
-            error_log($response->get_error_message());
-            return false;
-        }
-        $this->initialize($this->getId());
-
-        return true;
-    }
-
-    public function detach(string $entityType, int $id): bool
-    {
-        $response = \WPBullhornStaffing::instance()->request(
-            'DELETE',
-            'entity/' . $this->getEntityType() . '/' . $this->getId() . '/' . $entityType . '/' . $id
-        );
-
-        if (is_wp_error($response)) {
-            error_log($response->get_error_message());
-            return false;
-        }
-        $this->initialize($this->getId());
-
-        return true;
-    }
-
-    public static function fromObject($data)
-    {
-        $obj = new static();
-        $obj->setData($data);
-
-        return $obj;
-    }
-
-    protected function fetchInfo($id)
-    {
-
-        $response = \WPBullhornStaffing::instance()->request(
-            'GET',
-            'entity/' . $this->getEntityType() . '/' . $id,
-            [
-                'query' => [
-                    'fields' => implode(',', array_merge(
-                        $this->fields,
-                        array_keys($this->fieldsMap)
-                    ))
-                ]
-            ]
-        );
-        if (is_wp_error($response)) {
-            error_log($response->get_error_message());
-            return null;
-        }
-
-        return $response->data;
-    }
-
-
-    protected function initialize($id)
-    {
-        $data = $this->fetchInfo($id);
-        if ($data) {
-            $this->setData($data);
-        }
-    }
-
-    public function refresh()
-    {
-        $this->initialize($this->getId());
-    }
-
-    protected function setData($data)
-    {
-        foreach ($data as $key => $value) {
-            if (isset($this->fieldsMap[$key]) && property_exists($this, $this->fieldsMap[$key])) {
-                $this->{$this->fieldsMap[$key]} = $value;
-            } elseif (property_exists($this, $key)) {
-                $this->{$key} = $value;
-            }
-        }
-        set_transient(static::transientName($this->getId()), $this, HOUR_IN_SECONDS);
-        return $this;
-    }
-
-    abstract public function getEntityType(): string;
-
-    protected function updateValuesBeforeSend(array $values)
-    {
-        return $values;
-    }
-
 }

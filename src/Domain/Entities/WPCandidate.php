@@ -1,69 +1,50 @@
 <?php
+declare(strict_types=1);
 
 namespace WPBullhornStaffing\Domain\Entities;
-
 
 use WPBullhornStaffing\Domain\Contracts\CandidateInfo;
 
 class WPCandidate
 {
-    /** @var int */
-    protected $bhId;
+    protected int $bhId;
+    protected \WP_User $user;
+    protected string $candidateInfoClass;
+    protected ?AbstractBhEntity $info = null;
+    protected string $candidateFilesClass;
+    protected ?CandidateFiles $files = null;
 
-    /** @var \WP_User */
-    protected $user;
-
-    protected $candidateInfoClass;
-    protected $info;
-
-    protected $candidateFilesClass;
-    protected $files;
-
-    /**
-     * BhCandidate constructor.
-     * @param int $bhId
-     */
-    public function __construct(\WP_User $user, $bhId, array $subInfoclasses)
+    public function __construct(\WP_User $user, int $bhId, array $subInfoclasses)
     {
         $this->user = $user;
-        $this->bhId = (int)$bhId;
-        $this->candidateInfoClass = $subInfoclasses['candidateInfoClass'] ?? \WPBullhornStaffing\Domain\Entities\CandidateInfo::class;
-        $this->candidateFilesClass = $subInfoclasses['candidateFilesClass'] ?? \WPBullhornStaffing\Domain\Entities\CandidateFiles::class;
+        $this->bhId = $bhId;
+        $this->candidateInfoClass = $subInfoclasses['candidateInfoClass'] ?? CandidateInfo::class;
+        $this->candidateFilesClass = $subInfoclasses['candidateFilesClass'] ?? CandidateFiles::class;
     }
 
-    /**
-     * @return int
-     */
     public function getBhId(): int
     {
         return $this->bhId;
     }
 
-    /**
-     * @return \WP_User
-     */
     public function getUser(): \WP_User
     {
         return $this->user;
     }
 
-
-    public function getInfo($forceFetch = false): AbstractBhEntity
+    public function getInfo(bool $forceFetch = false): AbstractBhEntity
     {
-
         if (!$this->info || $forceFetch) {
-            $this->info = call_user_func($this->candidateInfoClass . '::find', $this->getBhId());
+            $this->info = call_user_func([$this->candidateInfoClass, 'find'], $this->getBhId());
         }
         return $this->info;
     }
 
-    public function getFiles($forceFetch = false): CandidateFiles
+    public function getFiles(bool $forceFetch = false): CandidateFiles
     {
         if (!$this->files || $forceFetch) {
-            $this->files = call_user_func($this->candidateFilesClass . '::find', $this->getBhId());
+            $this->files = call_user_func([$this->candidateFilesClass, 'find'], $this->getBhId());
         }
         return $this->files;
     }
-
-
 }
