@@ -2,7 +2,7 @@
 
 === Bullhorn Staffing API Client for WordPress ===
 # Contributors: Marko Tiosavljevic
-# Tags: bullhorn, staffing, api
+## Tags: bullhorn, staffing, api
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
